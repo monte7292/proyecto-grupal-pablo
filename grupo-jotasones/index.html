@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Guardias</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th { background-color: #007bff; color: white; }
+        input[type="text"] { width: 90%; padding: 5px; }
+        input[type="number"] { width: 50px; padding: 5px; }
+        button { background-color: #28a745; color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 4px; }
+        button:hover { background-color: #218838; }
+    </style>
+</head>
+<body>
+
+    <h2>Panel de Gestión de Guardias</h2>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Profesor</th>
+                <th>Hora</th>
+                <th>Tarea / Observaciones</th>
+                <th>¿Ausencia?</th>
+                <th>Acción</th>
+            </tr>
+        </thead>
+        <tbody id="tabla-contenido"></tbody>
+    </table>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api';
+
+        // 1. Cargar lista de profesores
+        async function cargarProfesores() {
+            const res = await fetch(`${API_URL}/profesores`);
+            const profesores = await res.json();
+            
+            const tbody = document.getElementById('tabla-contenido');
+            tbody.innerHTML = ''; // Limpiar
+
+            profesores.forEach(profe => {
+                const tr = document.createElement('tr');
+
+                // Creamos inputs con IDs únicos basados en el ID del profesor
+                // Ejemplo: id="tarea-5" para el profesor con ID 5
+                tr.innerHTML = `
+                    <td style="text-align: left; font-weight: bold;">${profe.nombre} ${profe.apellidos}</td>
+                    
+                    <td>
+                        <input type="number" id="hora-${profe.id}" placeholder="1-6" min="1" max="6">
+                    </td>
+                    
+                    <td>
+                        <input type="text" id="tarea-${profe.id}" placeholder="Ej: Ejercicios pág 20...">
+                    </td>
+                    
+                    <td>
+                        <input type="checkbox" id="ausencia-${profe.id}">
+                    </td>
+                    
+                    <td>
+                        <button onclick="enviarReporte(${profe.id})">Guardar</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 2. Función para ENVIAR los datos (POST)
+        async function enviarReporte(idProfesor) {
+            // Recoger los valores de LOS inputs de ESE profesor específico
+            const horaVal = document.getElementById(`hora-${idProfesor}`).value;
+            const tareaVal = document.getElementById(`tarea-${idProfesor}`).value;
+            const ausenciaVal = document.getElementById(`ausencia-${idProfesor}`).checked;
+
+            if(!horaVal) {
+                alert("Por favor, indica la hora.");
+                return;
+            }
+
+            // Crear el objeto a enviar
+            const datos = {
+                profesor_id: idProfesor,
+                hora: horaVal,
+                tarea: tareaVal,
+                es_ausencia: ausenciaVal // enviará true o false
+            };
+
+            // Enviar al servidor
+            try {
+                const respuesta = await fetch(`${API_URL}/reportes`, {
+                    method: 'POST', // Importante: Método POST para guardar
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(datos)
+                });
+
+                if(respuesta.ok) {
+                    alert(`✅ Datos guardados para el profesor ID ${idProfesor}`);
+                    // Opcional: Limpiar los campos después de enviar
+                    document.getElementById(`tarea-${idProfesor}`).value = '';
+                    document.getElementById(`ausencia-${idProfesor}`).checked = false;
+                } else {
+                    alert("❌ Error al guardar.");
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Error de conexión");
+            }
+        }
+
+        // Iniciar carga
+        cargarProfesores();
+    </script>
+</body>
+</html>
