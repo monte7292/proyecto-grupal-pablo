@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico CORS</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #555;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            box-sizing: border-box;
+        }
+        .url-display {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin: 10px 0;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-ok { background: #28a745; }
+        .status-error { background: #dc3545; }
+        .status-warning { background: #ffc107; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Diagnóstico CORS</h1>
+        
+        <div class="test-section">
+            <h3>🌐 Información del Navegador</h3>
+            <div id="browserInfo" class="result info">Cargando información del navegador...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>📋 Configurar URL de la API</h3>
+            <input type="text" id="apiUrl" placeholder="http://localhost:3000/api/v1" value="http://localhost:3000/api/v1">
+            <button onclick="updateBaseUrl()">Actualizar URL</button>
+            <div class="url-display">
+                <strong>URL Base:</strong> <span id="baseUrl"></span>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 Test 1: Petición Simple GET</h3>
+            <button onclick="testSimpleGet()">Test Simple GET</button>
+            <div id="simpleGetResult" class="result info">Haz clic para probar petición simple...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 Test 2: Petición con Headers Personalizados</h3>
+            <button onclick="testCustomHeaders()">Test con Headers</button>
+            <div id="customHeadersResult" class="result info">Haz clic para probar con headers personalizados...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 Test 3: Petición POST (con body)</h3>
+            <button onclick="testPostRequest()">Test POST</button>
+            <div id="postResult" class="result info">Haz clic para probar petición POST...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 Test 4: Petición OPTIONS (Preflight)</h3>
+            <button onclick="testOptionsRequest()">Test OPTIONS</button>
+            <div id="optionsResult" class="result info">Haz clic para probar petición OPTIONS...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 Test 5: Múltiples Peticiones Concurrentes</h3>
+            <button onclick="testConcurrentRequests()">Test Concurrentes</button>
+            <div id="concurrentResult" class="result info">Haz clic para probar peticiones concurrentes...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Resumen de Tests</h3>
+            <div id="summary" class="result info">Realiza los tests para ver el resumen...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>🛠️ Soluciones Comunes</h3>
+            <div id="solutions" class="result warning">
+                <strong>Si tienes problemas de CORS, prueba:</strong><br>
+                1. Asegúrate que ambos dispositivos están en la misma red<br>
+                2. Deshabilita temporalmente el firewall/antivirus<br>
+                3. Usa la IP correcta del servidor<br>
+                4. Verifica que el servidor esté escuchando en 0.0.0.0:3000<br>
+                5. Intenta con diferentes navegadores
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let API_BASE_URL = 'http://localhost:3000/api/v1';
+        let testResults = {
+            simpleGet: null,
+            customHeaders: null,
+            postRequest: null,
+            optionsRequest: null,
+            concurrentRequests: null
+        };
+
+        // Mostrar información del navegador
+        function showBrowserInfo() {
+            const info = {
+                userAgent: navigator.userAgent,
+                language: navigator.language,
+                platform: navigator.platform,
+                cookieEnabled: navigator.cookieEnabled,
+                onLine: navigator.onLine,
+                currentUrl: window.location.href,
+                hostname: window.location.hostname,
+                protocol: window.location.protocol
+            };
+            
+            document.getElementById('browserInfo').textContent = JSON.stringify(info, null, 2);
+        }
+
+        // Actualizar URL base
+        function updateBaseUrl() {
+            const url = document.getElementById('apiUrl').value;
+            if (url) {
+                API_BASE_URL = url;
+                document.getElementById('baseUrl').textContent = API_BASE_URL;
+                showResult('info', 'URL actualizada a: ' + API_BASE_URL, 'simpleGetResult');
+            }
+        }
+
+        // Mostrar resultados
+        function showResult(type, message, elementId) {
+            const element = document.getElementById(elementId);
+            element.className = `result ${type}`;
+            element.textContent = message;
+        }
+
+        // Test 1: Petición Simple GET
+        async function testSimpleGet() {
+            try {
+                showResult('info', 'Probando petición simple GET...', 'simpleGetResult');
+                const startTime = Date.now();
+                
+                const response = await fetch(`${API_BASE_URL}/health`, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                
+                const endTime = Date.now();
+                const data = await response.json();
+                
+                testResults.simpleGet = {
+                    success: response.ok,
+                    status: response.status,
+                    statusText: response.statusText,
+                    time: endTime - startTime,
+                    headers: Object.fromEntries(response.headers.entries()),
+                    data: data
+                };
+                
+                if (response.ok) {
+                    showResult('success', `✅ Petición simple exitosa (${endTime - startTime}ms):\n${JSON.stringify(testResults.simpleGet, null, 2)}`, 'simpleGetResult');
+                } else {
+                    showResult('error', `❌ Error en petición simple:\n${JSON.stringify(testResults.simpleGet, null, 2)}`, 'simpleGetResult');
+                }
+            } catch (error) {
+                testResults.simpleGet = {
+                    success: false,
+                    error: error.message,
+                    stack: error.stack
+                };
+                showResult('error', `❌ Error de conexión:\n${error.message}\n\nStack:\n${error.stack}`, 'simpleGetResult');
+            }
+            updateSummary();
+        }
+
+        // Test 2: Petición con Headers Personalizados
+        async function testCustomHeaders() {
+            try {
+                showResult('info', 'Probando petición con headers personalizados...', 'customHeadersResult');
+                const startTime = Date.now();
+                
+                const response = await fetch(`${API_BASE_URL}/health`, {
+                    method: 'GET',
+                    mode: 'cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-Custom-Header': 'test-value',
+                        'Authorization': 'Bearer test-token'
+                    }
+                });
+                
+                const endTime = Date.now();
+                const data = await response.json();
+                
+                testResults.customHeaders = {
+                    success: response.ok,
+                    status: response.status,
+                    statusText: response.statusText,
+                    time: endTime - startTime,
+                    headers: Object.fromEntries(response.headers.entries()),
+                    data: data
+                };
+                
+                if (response.ok) {
+                    showResult('success', `✅ Petición con headers exitosa (${endTime - startTime}ms):\n${JSON.stringify(testResults.customHeaders, null, 2)}`, 'customHeadersResult');
+                } else {
+                    showResult('error', `❌ Error con headers personalizados:\n${JSON.stringify(testResults.customHeaders, null, 2)}`, 'customHeadersResult');
+                }
+            } catch (error) {
+                testResults.customHeaders = {
+                    success: false,
+                    error: error.message,
+                    stack: error.stack
+                };
+                showResult('error', `❌ Error de conexión:\n${error.message}\n\nStack:\n${error.stack}`, 'customHeadersResult');
+            }
+            updateSummary();
+        }
+
+        // Test 3: Petición POST
+        async function testPostRequest() {
+            try {
+                showResult('info', 'Probando petición POST...', 'postResult');
+                const startTime = Date.now();
+                
+                const response = await fetch(`${API_BASE_URL}/profesores`, {
+                    method: 'POST',
+                    mode: 'cors',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        nombre: 'Test',
+                        apellidos: 'CORS'
+                    })
+                });
+                
+                const endTime = Date.now();
+                const data = await response.json();
+                
+                testResults.postRequest = {
+                    success: response.ok,
+                    status: response.status,
+                    statusText: response.statusText,
+                    time: endTime - startTime,
+                    headers: Object.fromEntries(response.headers.entries()),
+                    data: data
+                };
+                
+                if (response.ok) {
+                    showResult('success', `✅ Petición POST exitosa (${endTime - startTime}ms):\n${JSON.stringify(testResults.postRequest, null, 2)}`, 'postResult');
+                } else {
+                    showResult('error', `❌ Error en petición POST:\n${JSON.stringify(testResults.postRequest, null, 2)}`, 'postResult');
+                }
+            } catch (error) {
+                testResults.postRequest = {
+                    success: false,
+                    error: error.message,
+                    stack: error.stack
+                };
+                showResult('error', `❌ Error de conexión:\n${error.message}\n\nStack:\n${error.stack}`, 'postResult');
+            }
+            updateSummary();
+        }
+
+        // Test 4: Petición OPTIONS
+        async function testOptionsRequest() {
+            try {
+                showResult('info', 'Probando petición OPTIONS (preflight)...', 'optionsResult');
+                const startTime = Date.now();
+                
+                const response = await fetch(`${API_BASE_URL}/ausencias`, {
+                    method: 'OPTIONS',
+                    mode: 'cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                
+                const endTime = Date.now();
+                
+                testResults.optionsRequest = {
+                    success: response.ok,
+                    status: response.status,
+                    statusText: response.statusText,
+                    time: endTime - startTime,
+                    headers: Object.fromEntries(response.headers.entries())
+                };
+                
+                if (response.ok) {
+                    showResult('success', `✅ Petición OPTIONS exitosa (${endTime - startTime}ms):\n${JSON.stringify(testResults.optionsRequest, null, 2)}`, 'optionsResult');
+                } else {
+                    showResult('error', `❌ Error en petición OPTIONS:\n${JSON.stringify(testResults.optionsRequest, null, 2)}`, 'optionsResult');
+                }
+            } catch (error) {
+                testResults.optionsRequest = {
+                    success: false,
+                    error: error.message,
+                    stack: error.stack
+                };
+                showResult('error', `❌ Error de conexión:\n${error.message}\n\nStack:\n${error.stack}`, 'optionsResult');
+            }
+            updateSummary();
+        }
+
+        // Test 5: Peticiones Concurrentes
+        async function testConcurrentRequests() {
+            try {
+                showResult('info', 'Probando 5 peticiones concurrentes...', 'concurrentResult');
+                const startTime = Date.now();
+                
+                const requests = [];
+                for (let i = 0; i < 5; i++) {
+                    requests.push(
+                        fetch(`${API_BASE_URL}/health`, {
+                            method: 'GET',
+                            mode: 'cors'
+                        })
+                    );
+                }
+                
+                const responses = await Promise.all(requests);
+                const endTime = Date.now();
+                
+                const results = await Promise.all(responses.map(async (response, index) => {
+                    const data = await response.json();
+                    return {
+                        index: index + 1,
+                        success: response.ok,
+                        status: response.status,
+                        data: data
+                    };
+                }));
+                
+                testResults.concurrentRequests = {
+                    success: results.every(r => r.success),
+                    time: endTime - startTime,
+                    results: results
+                };
+                
+                if (results.every(r => r.success)) {
+                    showResult('success', `✅ Todas las peticiones concurrentes exitosas (${endTime - startTime}ms):\n${JSON.stringify(testResults.concurrentRequests, null, 2)}`, 'concurrentResult');
+                } else {
+                    showResult('error', `❌ Algunas peticiones concurrentes fallaron:\n${JSON.stringify(testResults.concurrentRequests, null, 2)}`, 'concurrentResult');
+                }
+            } catch (error) {
+                testResults.concurrentRequests = {
+                    success: false,
+                    error: error.message,
+                    stack: error.stack
+                };
+                showResult('error', `❌ Error en peticiones concurrentes:\n${error.message}\n\nStack:\n${error.stack}`, 'concurrentResult');
+            }
+            updateSummary();
+        }
+
+        // Actualizar resumen
+        function updateSummary() {
+            const totalTests = Object.keys(testResults).length;
+            const passedTests = Object.values(testResults).filter(r => r && r.success).length;
+            const failedTests = Object.values(testResults).filter(r => r && !r.success).length;
+            
+            let summary = `📊 Resumen de Tests:\n`;
+            summary += `✅ Pasados: ${passedTests}/${totalTests}\n`;
+            summary += `❌ Fallidos: ${failedTests}/${totalTests}\n\n`;
+            
+            Object.entries(testResults).forEach(([test, result]) => {
+                if (result) {
+                    const status = result.success ? '✅' : '❌';
+                    summary += `${status} ${test}: ${result.success ? 'OK' : 'ERROR'}\n`;
+                } else {
+                    summary += `⏳ ${test}: PENDIENTE\n`;
+                }
+            });
+            
+            if (failedTests > 0) {
+                summary += `\n🔍 Problemas detectados:\n`;
+                Object.entries(testResults).forEach(([test, result]) => {
+                    if (result && !result.success) {
+                        summary += `- ${test}: ${result.error || result.statusText || 'Error desconocido'}\n`;
+                    }
+                });
+            }
+            
+            document.getElementById('summary').textContent = summary;
+        }
+
+        // Inicializar
+        window.onload = function() {
+            showBrowserInfo();
+            document.getElementById('baseUrl').textContent = API_BASE_URL;
+            
+            // Detectar IP actual del usuario
+            const currentHost = window.location.hostname;
+            if (currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
+                const currentUrl = `${window.location.protocol}//${currentHost}:3000/api/v1`;
+                document.getElementById('apiUrl').value = currentUrl;
+                API_BASE_URL = currentUrl;
+                document.getElementById('baseUrl').textContent = API_BASE_URL;
+            }
+        };
+    </script>
+</body>
+</html>

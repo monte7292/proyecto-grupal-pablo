@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Panel de Guardias</title>
+
+<style>
+:root{
+    --azul:#2563eb;
+    --gris:#64748b;
+    --fondo:#f8fafc;
+    --borde:#e2e8f0;
+    --verde:#16a34a;
+    --rojo:#dc2626;
+    --naranja:#f97316;
+}
+
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui}
+
+body{
+    background:var(--fondo);
+    padding:20px;
+}
+
+h1{text-align:center;color:var(--azul)}
+h2{text-align:center;color:var(--gris);margin-bottom:14px}
+
+button{
+    padding:8px 12px;
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+    font-size:14px;
+    margin:4px;
+}
+.btn-principal{background:var(--azul);color:white;}
+.btn-secundario{background:#e0e7ff;color:var(--azul);}
+.btn-peligro{background:#fee2e2;color:var(--rojo);}
+.btn-exito{background:#dcfce7;color:var(--verde);}
+.btn-cubrir{background:#fed7aa;color:var(--naranja);}
+
+.panel{
+    background:white;
+    padding:14px;
+    border-radius:14px;
+    box-shadow:0 6px 16px rgba(0,0,0,.08);
+    margin-bottom:14px;
+}
+
+.franja{
+    display:grid;
+    grid-template-columns:1fr 2fr 1fr;
+    gap:16px;
+    padding:12px;
+    border-radius:14px;
+    margin-bottom:14px;
+}
+.franja:nth-child(even){background:#f1f5f9}
+
+.ausencia{
+    border:1px solid var(--borde);
+    padding:10px;
+    border-radius:12px;
+    margin-bottom:8px;
+    position: relative;
+}
+.cubierta{background:#d1fae5}
+.pendiente{background:#fee2e2}
+
+.form-ausencia, .form-cubrir{
+    display:none;
+    margin:20px 0;
+}
+
+.form-group{margin-bottom:10px}
+input,select{
+    width:100%;
+    padding:8px;
+    border-radius:8px;
+    border:1px solid var(--borde);
+}
+
+#tiempoCarga{
+    text-align:center;
+    margin-bottom:10px;
+    font-weight:bold;
+}
+
+.fuentes-datos{
+    text-align:center;
+    margin-bottom:14px;
+    background:white;
+    padding:14px;
+    border-radius:14px;
+    box-shadow:0 2px 8px rgba(0,0,0,.05);
+}
+
+.toast{
+    position:fixed;
+    top:20px;
+    right:20px;
+    background:var(--azul);
+    color:white;
+    padding:12px 20px;
+    border-radius:8px;
+    box-shadow:0 4px 12px rgba(0,0,0,.15);
+    z-index:1000;
+    animation:slideIn 0.3s ease;
+}
+
+@keyframes slideIn{
+    from{transform:translateX(100%);opacity:0}
+    to{transform:translateX(0);opacity:1}
+}
+
+.btn-cubrir-pequeno{
+    position:absolute;
+    top:8px;
+    right:8px;
+    padding:4px 8px;
+    font-size:12px;
+    background:var(--naranja);
+    color:white;
+    border:none;
+    border-radius:6px;
+    cursor:pointer;
+}
+
+</style>
+</head>
+
+<body>
+
+<h1>Panel de Guardias - IES ALIXAR</h1>
+<h2 id="tiempoCarga">Tiempo de carga: — ms</h2>
+
+<div class="fuentes-datos">
+    <strong>Fuente de datos:</strong>
+    <button class="btn-principal" onclick="cambiarFuente('mysql')">MySQL</button>
+    <button class="btn-principal" onclick="cambiarFuente('csv')">CSV</button>
+    <button class="btn-principal" onclick="cambiarFuente('json')">JSON</button>
+    <button class="btn-principal" onclick="cambiarFuente('mongo')">MongoDB</button>
+    
+    <div style="margin-top: 10px;">
+        <strong>Fecha:</strong>
+        <input type="date" id="fechaSelector" onchange="cambiarFecha()" style="margin-left: 10px; padding: 5px; border-radius: 5px; border: 1px solid var(--borde);">
+        <button class="btn-secundario" onclick="setFechaHoy()">Hoy</button>
+    </div>
+</div>
+
+<button class="btn-principal" onclick="toggleForm()">➕ Registrar ausencia</button>
+
+<!-- FORMULARIO AUSENCIA -->
+<div id="formAusencia" class="panel form-ausencia">
+    <h3>Registrar ausencia</h3>
+
+    <div class="form-group">
+        <label>Profesor</label>
+        <select id="profesorAusente"></select>
+    </div>
+
+    <div class="form-group">
+        <label>Grupo</label>
+        <select id="grupoAusente"></select>
+    </div>
+
+    <div class="form-group">
+        <label>Hora inicio</label>
+        <select id="horaInicio"></select>
+    </div>
+
+    <div class="form-group">
+        <label>Hora fin</label>
+        <select id="horaFin"></select>
+    </div>
+
+    <div class="form-group">
+        <label>Tarea para el alumnado</label>
+        <input id="tareaAusencia" placeholder="Ejercicios, Moodle, lectura…">
+    </div>
+
+    <button class="btn-principal" onclick="crearAusencia()">Guardar ausencia</button>
+</div>
+
+<!-- FORMULARIO CUBRIR AUSENCIA -->
+<div id="formCubrir" class="panel form-cubrir">
+    <h3>Cubrir ausencia</h3>
+    
+    <div class="form-group">
+        <label>Profesor de guardia disponible</label>
+        <select id="profesorGuardia"></select>
+    </div>
+
+    <div class="form-group">
+        <label>Ausencia a cubrir</label>
+        <div id="infoAusencia" style="background:#fee2e2;padding:10px;border-radius:8px;margin-bottom:10px;"></div>
+    </div>
+
+    <button class="btn-exito" onclick="confirmarCubrir()">Confirmar cubrimiento</button>
+    <button class="btn-secundario" onclick="cancelarCubrir()">Cancelar</button>
+</div>
+
+<div id="panelHoras"></div>
+
+<script>
+const API = location.origin + "/api";
+let fuenteActual = 'mysql';
+let fechaSeleccionada = new Date().toISOString().split('T')[0]; // Fecha actual por defecto
+let ultimaHoraCreada = null;
+let ausenciaActual = null;
+
+function toast(txt, tipo = 'normal'){
+    const t = document.createElement('div');
+    t.className = 'toast';
+    if (tipo === 'exito') t.style.background = 'var(--verde)';
+    if (tipo === 'error') t.style.background = 'var(--rojo)';
+    t.textContent = txt;
+    document.body.appendChild(t);
+    setTimeout(()=>t.remove(), 3000);
+}
+
+function toggleForm(){
+    formAusencia.style.display = 
+        formAusencia.style.display === 'block' ? 'none' : 'block';
+}
+
+function toggleFormCubrir(){
+    formCubrir.style.display = 
+        formCubrir.style.display === 'block' ? 'none' : 'block';
+}
+
+async function cargarDatos() {
+    try {
+        const inicio = performance.now();
+        
+        // Para MongoDB, pasar la fecha como parámetro
+        let url = `${API}/${fuenteActual}`;
+        if (fuenteActual === 'mongo') {
+            url += `?fecha=${fechaSeleccionada}`;
+        }
+        
+        const data = await fetch(url).then(r=>r.json());
+        const tiempo = data.tiempo || (Date.now()-inicio);
+        tiempoCarga.textContent = `Tiempo de carga (${fuenteActual}): ${tiempo.toFixed(0)} ms`;
+        
+        // Mostrar la fecha actual en el título si es MongoDB
+        if (fuenteActual === 'mongo') {
+            const fechaFormateada = new Date(fechaSeleccionada + 'T00:00:00').toLocaleDateString('es-ES', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            document.querySelector('h1').innerHTML = `Panel de Guardias - IES ALIXAR<br><small style="font-weight: normal; color: var(--gris);">${fechaFormateada}</small>`;
+        } else {
+            document.querySelector('h1').innerHTML = 'Panel de Guardias - IES ALIXAR';
+        }
+        
+        pintarDatos(data.horas || []);
+    } catch(e){
+        console.error(e);
+        toast('Error cargando datos', 'error');
+    }
+}
+
+function pintarDatos(horas){
+    panelHoras.innerHTML = '';
+    horas.forEach(h => {
+        const guardiasDisponibles = h.guardias.filter(g => 
+            !h.faltas.some(f => f.profesor === g)
+        );
+        
+        panelHoras.innerHTML += `
+        <div class="franja" id="hora${h.hora}">
+            <div class="panel">
+                <b>${h.hora} · Guardias</b><br>
+                ${guardiasDisponibles.length > 0 ? 
+                    guardiasDisponibles.map(g => `✅ ${g}`).join('<br>') : 
+                    '🚫 Sin guardias disponibles'
+                }
+                <br><small>Disponibles: ${guardiasDisponibles.length}/${h.guardias.length}</small>
+            </div>
+            <div class="panel">
+                <b>${h.hora} · Ausencias</b><br>
+                ${h.faltas.map(f=>`
+                    <div class="ausencia ${f.cubierta ? 'cubierta' : 'pendiente'}" id="ausencia-${f.profesor}-${h.hora}">
+                        <b>${f.profesor}</b><br>
+                        <b>Aula:</b> ${f.aula || '—'}
+                        ${f.cubierta ? 
+                            `<div style="color: var(--verde); font-weight: bold; margin-top: 8px;">
+                                ✅ Cubierto por: ${f.cubierto_por}
+                            </div>` :
+                            (guardiasDisponibles.length > 0 ? 
+                                `<button class="btn-cubrir-pequeno" 
+                                    data-profesor="${f.profesor}" 
+                                    data-aula="${f.aula || '—'}" 
+                                    data-hora="${h.hora}" 
+                                    data-guardias='${JSON.stringify(guardiasDisponibles)}'
+                                    onclick="abrirFormCubrir(this)">Cubrir</button>` 
+                                : '<small style="color:var(--rojo)">Sin guardias</small>'
+                            )
+                        }
+                    </div>
+                `).join('') || '<div style="color:var(--verde)">✅ No hay ausencias</div>'}
+            </div>
+            <div class="panel">
+                <b>${h.hora}</b> · Estado<br>
+                ${h.faltas.length === 0 ? 
+                    '<span style="color:var(--verde)">✅ Completo</span>' : 
+                    `<span style="color:var(--rojo)">⚠️ ${h.faltas.length} ausencia(s)</span>`
+                }
+            </div>
+        </div>
+        `;
+    });
+}
+
+function cambiarFuente(f){
+    fuenteActual = f;
+    cargarDatos();
+}
+
+function cambiarFecha() {
+    fechaSeleccionada = document.getElementById('fechaSelector').value;
+    console.log('Fecha cambiada a:', fechaSeleccionada);
+    cargarDatos();
+}
+
+function setFechaHoy() {
+    const hoy = new Date().toISOString().split('T')[0];
+    document.getElementById('fechaSelector').value = hoy;
+    fechaSeleccionada = hoy;
+    console.log('Fecha establecida a hoy:', fechaSeleccionada);
+    cargarDatos();
+}
+
+function abrirFormCubrir(button) {
+    const profesor = button.dataset.profesor;
+    const aula = button.dataset.aula;
+    const hora = button.dataset.hora;
+    const guardiasDisponibles = JSON.parse(button.dataset.guardias);
+    
+    ausenciaActual = { profesor, aula, hora };
+    
+    document.getElementById('infoAusencia').innerHTML = `
+        <strong>${profesor}</strong> - ${aula}<br>
+        Hora: ${hora}
+    `;
+    
+    document.getElementById('profesorGuardia').innerHTML = 
+        guardiasDisponibles.map(g => `<option value="${g}">${g}</option>`).join('');
+    
+    toggleFormCubrir();
+}
+
+async function confirmarCubrir() {
+    const profesorGuardia = document.getElementById('profesorGuardia').value;
+    
+    try {
+        const response = await fetch(`${API}/cubrir-ausencia`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                profesor_guardia: profesorGuardia,
+                profesor_ausente: ausenciaActual.profesor,
+                hora: ausenciaActual.hora,
+                fecha: fechaSeleccionada
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.ok) {
+            // Actualizar visualmente la ausencia como cubierta
+            const ausenciaElement = document.getElementById(`ausencia-${ausenciaActual.profesor}-${ausenciaActual.hora}`);
+            if (ausenciaElement) {
+                ausenciaElement.classList.remove('pendiente');
+                ausenciaElement.classList.add('cubierta');
+                
+                // Eliminar el botón de cubrir
+                const botonCubrir = ausenciaElement.querySelector('.btn-cubrir-pequeno');
+                if (botonCubrir) {
+                    botonCubrir.remove();
+                }
+                
+                // Añadir indicador de cubierto
+                const cubiertoDiv = document.createElement('div');
+                cubiertoDiv.style.cssText = 'color: var(--verde); font-weight: bold; margin-top: 8px;';
+                cubiertoDiv.innerHTML = `✅ Cubierto por: ${profesorGuardia}`;
+                ausenciaElement.appendChild(cubiertoDiv);
+            }
+            
+            toast(result.mensaje, 'exito');
+            cancelarCubrir();
+            
+            // Recargar datos después de un breve delay para ver el cambio
+            setTimeout(() => {
+                cargarDatos();
+            }, 1000);
+        } else {
+            toast('Error al cubrir ausencia', 'error');
+        }
+    } catch(e) {
+        console.error(e);
+        toast('Error de conexión', 'error');
+    }
+}
+
+function cancelarCubrir() {
+    ausenciaActual = null;
+    formCubrir.style.display = 'none';
+}
+
+// ---------------- AUSENCIAS ----------------
+async function crearAusencia(){
+    try {
+        await fetch(API+'/reportes',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({
+                profesor_id:profesorAusente.value,
+                grupo_id:grupoAusente.value,
+                hora_inicio:horaInicio.value,
+                hora_fin:horaFin.value,
+                tarea:tareaAusencia.value,
+                fecha: fechaSeleccionada
+            })
+        });
+        
+        ultimaHoraCreada = horaInicio.value;
+        formAusencia.style.display='none';
+        toast('✅ Ausencia registrada', 'exito');
+        cargarDatos();
+    } catch(e) {
+        console.error(e);
+        toast('Error al registrar ausencia', 'error');
+    }
+}
+
+// ---------------- INIT ----------------
+(async ()=>{
+    // Establecer la fecha actual en el calendario
+    document.getElementById('fechaSelector').value = fechaSeleccionada;
+    
+    try {
+        const profesoresResponse = await fetch(`${API}/profesores`).then(r=>r.json());
+        const gruposResponse = await fetch(`${API}/grupos`).then(r=>r.json());
+        
+        profesorAusente.innerHTML = profesoresResponse.profesores.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+        grupoAusente.innerHTML = gruposResponse.grupos.map(g=>`<option value="${g.id}">${g.nombre}</option>`).join('');
+
+        for(let h=1;h<=6;h++){
+            horaInicio.innerHTML+=`<option value="${h}">${h}ª</option>`;
+            horaFin.innerHTML+=`<option value="${h}">${h}ª</option>`;
+        }
+
+        cargarDatos();
+    } catch(e) {
+        console.error('Error inicializando:', e);
+        toast('Error al cargar datos iniciales', 'error');
+    }
+})();
+</script>
+
+</body>
+</html>
