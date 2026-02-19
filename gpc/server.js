@@ -33,12 +33,18 @@ app.use((req, res, next) => {
 });
 
 /* ================= MYSQL ================= */
-const pool = mysql.createPool({
-  host: "localhost",
-  user: "rootG",
-  password: "root2025G",
-  database: "guardias"
-});
+// Configuración de MySQL (local o remoto)
+const useRemoteMySQL = process.env.USE_REMOTE_MYSQL === 'true';
+const credenciales = useRemoteMySQL ? 
+  require('./credencialesSQL_remoto') : 
+  require('./credencialesSQL');
+
+const pool = mysql.createPool(credenciales);
+
+// Log de configuración
+console.log(`🗄️ MySQL: ${useRemoteMySQL ? 'REMOTO' : 'LOCAL'}`);
+console.log(`📍 Host: ${credenciales.host}`);
+console.log(`📊 Database: ${credenciales.database}`);
 
 /* ================= MONGO ================= */
 const mongoClient = new MongoClient(process.env.MONGO_URI);
