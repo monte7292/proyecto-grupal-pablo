@@ -1,7 +1,7 @@
 module.exports = {
-  host: "IP_LUBUNTU", // Cambiar por la IP real
-  user: "guardias_user",
-  password: "tu_contraseña_segura",
+  host: "172.22.0.205", // IP de la máquina virtual con MySQL
+  user: "rootG",
+  password: "root2025G",
   database: "guardias",
   connectionLimit: 10,
   // Opciones adicionales para conexión remota

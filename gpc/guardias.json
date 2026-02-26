@@ -1,0 +1,25 @@
+{
+  "faltas": [
+    {
+      "profesor": "Marta Sanchez",
+      "aula": "2º ESO A",
+      "hora": "1ª Hora"
+    },
+    {
+      "profesor": "Francisco J.",
+      "aula": "3º ESO C",
+      "hora": "2ª Hora"
+    }
+  ],
+  "guardias": [
+    {
+      "hora": "1ª Hora",
+      "profesores": ["Juan Pérez", "Ana García"]
+    },
+    {
+      "hora": "2ª Hora",
+      "profesores": ["Pedro T.", "Isabel R."]
+    }
+  ]
+}
+

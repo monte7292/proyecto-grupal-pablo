@@ -33,26 +33,36 @@ app.use((req, res, next) => {
 });
 
 /* ================= MYSQL ================= */
-// Configuración de MySQL (local o remoto)
+// Modo de acceso a MySQL:
+// - USE_REMOTE_MYSQL=false  -> conexión directa a MySQL local (XAMPP)
+// - USE_REMOTE_MYSQL=true   -> consumo de la API HTTP de Jotasones (sin tocar MySQL desde Windows)
 const useRemoteMySQL = process.env.USE_REMOTE_MYSQL === 'true';
-const credenciales = useRemoteMySQL ? 
-  require('./credencialesSQL_remoto') : 
-  require('./credencialesSQL');
+const mysqlApiUrl = process.env.MYSQL_API_URL || 'http://172.22.0.205:3000';
 
-const pool = mysql.createPool(credenciales);
+let pool = null;
+let credenciales = null;
 
-// Log de configuración
-console.log(`🗄️ MySQL: ${useRemoteMySQL ? 'REMOTO' : 'LOCAL'}`);
-console.log(`📍 Host: ${credenciales.host}`);
-console.log(`📊 Database: ${credenciales.database}`);
+if (!useRemoteMySQL) {
+  credenciales = require('./credencialesSQL');
+  pool = mysql.createPool(credenciales);
+
+  console.log(`🗄️ MySQL: LOCAL`);
+  console.log(`📍 Host: ${credenciales.host}`);
+  console.log(`📊 Database: ${credenciales.database}`);
+} else {
+  console.log(`🗄️ MySQL: REMOTO vía API Jotasones`);
+  console.log(`🌍 URL API MySQL: ${mysqlApiUrl}`);
+}
 
 /* ================= MONGO ================= */
-const mongoClient = new MongoClient(process.env.MONGO_URI);
-let mongoDB = null;
-mongoClient.connect().then(client => {
-  mongoDB = client.db(); // DB por defecto
-  console.log("Mongo conectado");
-}).catch(err => console.error("Error Mongo:", err));
+// Conexión directa a Mongo desactivada: ahora usamos solo la API REST de Mongo
+// Si en el futuro quieres conectar directamente a MongoDB, descomenta este bloque y ajusta MONGO_URI en .env
+// const mongoClient = new MongoClient(process.env.MONGO_URI);
+// let mongoDB = null;
+// mongoClient.connect().then(client => {
+//   mongoDB = client.db(); // DB por defecto
+//   console.log("Mongo conectado");
+// }).catch(err => console.error("Error Mongo:", err));
 
 // VARIABLES GLOBALES
 let cubrimientos = []; // Registro de cubrimientos en memoria
@@ -131,26 +141,67 @@ function procesarCubrimientos(horas) {
 app.get("/api/mysql", async (req, res) => {
   const inicio = Date.now();
   try {
-    const [rows] = await pool.query(`
-      SELECT r.hora_inicio, CONCAT(p.nombre,' ',p.apellidos) AS profesor_falta, g.nombre AS aula,
-             CONCAT(pg.nombre,' ',pg.apellidos) AS profesor_guardia
-      FROM reportes r
-      JOIN profesores p ON r.profesor_id = p.id
-      JOIN grupos g ON r.grupo_id = g.id
-      LEFT JOIN guardias gu ON gu.reporte_id = r.id
-      LEFT JOIN profesores pg ON gu.profesor_guardia_id = pg.id
-    `);
-    const horas = crearHorasVacias();
-    rows.forEach(r => {
-      const h = mapHora(r.hora_inicio);
-      if (r.profesor_falta) horas[h].faltas.push({ profesor: r.profesor_falta, aula: r.aula });
-      if (r.profesor_guardia) horas[h].guardias.push(r.profesor_guardia);
-    });
-    
-    // Procesar cubrimientos
-    procesarCubrimientos(horas);
-    
-    res.json({ tiempo: Date.now() - inicio, horas: Object.values(horas) });
+    const fecha = req.query.fecha || new Date().toISOString().split('T')[0];
+
+    if (useRemoteMySQL) {
+      // Consumir la API HTTP de Jotasones
+      const { default: fetch } = await import('node-fetch');
+
+      const response = await fetch(`${mysqlApiUrl}/api/panel?fecha=${fecha}`);
+      if (!response.ok) {
+        throw new Error(`Error HTTP ${response.status} al llamar a API Jotasones`);
+      }
+      const panelData = await response.json();
+
+      const horas = crearHorasVacias();
+
+      (panelData || []).forEach(r => {
+        const h = mapHora(r.hora_inicio);
+        if (!horas[h]) return;
+
+        if (r.profesor) {
+          horas[h].faltas.push({
+            profesor: r.profesor,
+            aula: r.grupo || "-"
+          });
+        }
+        if (r.nombre_guardia) {
+          horas[h].guardias.push(r.nombre_guardia);
+        }
+      });
+
+      // Procesar cubrimientos
+      procesarCubrimientos(horas);
+
+      res.json({
+        tiempo: Date.now() - inicio,
+        horas: Object.values(horas),
+        fuente: "API Jotasones",
+        fecha
+      });
+    } else {
+      // Modo local: conexión directa a MySQL
+      const [rows] = await pool.query(`
+        SELECT r.hora_inicio, CONCAT(p.nombre,' ',p.apellidos) AS profesor_falta, g.nombre AS aula,
+               CONCAT(pg.nombre,' ',pg.apellidos) AS profesor_guardia
+        FROM reportes r
+        JOIN profesores p ON r.profesor_id = p.id
+        JOIN grupos g ON r.grupo_id = g.id
+        LEFT JOIN guardias gu ON gu.reporte_id = r.id
+        LEFT JOIN profesores pg ON gu.profesor_guardia_id = pg.id
+      `);
+      const horas = crearHorasVacias();
+      rows.forEach(r => {
+        const h = mapHora(r.hora_inicio);
+        if (r.profesor_falta) horas[h].faltas.push({ profesor: r.profesor_falta, aula: r.aula });
+        if (r.profesor_guardia) horas[h].guardias.push(r.profesor_guardia);
+      });
+      
+      // Procesar cubrimientos
+      procesarCubrimientos(horas);
+      
+      res.json({ tiempo: Date.now() - inicio, horas: Object.values(horas) });
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Error MySQL" });
@@ -270,8 +321,8 @@ app.get("/api/mongo", async (req, res) => {
     // Importación dinámica de node-fetch
     const { default: fetch } = await import('node-fetch');
     
-    // Conexión mediante API REST local
-    const mongoApiUrl = process.env.MONGO_API_URL || "http://172.22.0.138:3001";
+    // Conexión mediante API REST (en la nueva máquina virtual)
+    const mongoApiUrl = process.env.MONGO_API_URL || "http://172.22.0.205:3001";
     const fechaConsulta = req.query.fecha || new Date().toISOString().split('T')[0]; // Fecha del query o actual
     
     console.log("Intentando conectar a:", mongoApiUrl);
@@ -1231,16 +1282,33 @@ app.get("/api/v1/docs-md", (req, res) => {
 // Endpoint de salud/check
 app.get("/api/v1/health", async (req, res) => {
   try {
-    // Verificar conexión a MySQL
-    await pool.query("SELECT 1");
-    
-    res.json({
-      success: true,
-      status: "healthy",
-      timestamp: new Date().toISOString(),
-      database: "connected",
-      version: "1.0.0"
-    });
+    if (useRemoteMySQL) {
+      // En modo remoto comprobamos que la API Jotasones responde
+      const { default: fetch } = await import('node-fetch');
+      const response = await fetch(`${mysqlApiUrl}/api/grupos`);
+      if (!response.ok) {
+        throw new Error(`Error HTTP ${response.status} al comprobar API Jotasones`);
+      }
+
+      res.json({
+        success: true,
+        status: "healthy",
+        timestamp: new Date().toISOString(),
+        database: "connected-via-api",
+        version: "1.0.0"
+      });
+    } else {
+      // Verificar conexión directa a MySQL
+      await pool.query("SELECT 1");
+      
+      res.json({
+        success: true,
+        status: "healthy",
+        timestamp: new Date().toISOString(),
+        database: "connected",
+        version: "1.0.0"
+      });
+    }
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -1256,11 +1324,30 @@ app.get("/api/v1/health", async (req, res) => {
 app.post("/api/reportes", async (req,res) => {
   const { profesor_id, grupo_id, hora_inicio, hora_fin, tarea, fecha } = req.body;
   try {
-    await pool.query(
-      `INSERT INTO reportes (profesor_id,grupo_id,hora_inicio,hora_fin,tarea,fecha) VALUES (?,?,?,?,?,?)`,
-      [profesor_id, grupo_id, hora_inicio, hora_fin, tarea, fecha]
-    );
-    res.json({ ok:true });
+    if (useRemoteMySQL) {
+      // Reenviar a la API Jotasones
+      const { default: fetch } = await import('node-fetch');
+      const response = await fetch(`${mysqlApiUrl}/api/reportes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profesor_id, grupo_id, hora_inicio, hora_fin, tarea, fecha })
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        console.error('Error API Jotasones /api/reportes:', response.status, text);
+        return res.status(500).json({ error: "Error remoto al crear reporte" });
+      }
+
+      const data = await response.json().catch(() => ({}));
+      res.json(data.ok ? data : { ok: true });
+    } else {
+      await pool.query(
+        `INSERT INTO reportes (profesor_id,grupo_id,hora_inicio,hora_fin,tarea,fecha) VALUES (?,?,?,?,?,?)`,
+        [profesor_id, grupo_id, hora_inicio, hora_fin, tarea, fecha]
+      );
+      res.json({ ok:true });
+    }
   } catch(err){
     console.error(err);
     res.status(500).json({ error:"Error insert reportes"});
@@ -1300,8 +1387,22 @@ app.post("/api/cubrir-ausencia", async (req, res) => {
 app.get("/api/profesores", async (req, res) => {
   const inicio = Date.now();
   try {
-    const [rows] = await pool.query("SELECT id, CONCAT(nombre,' ',apellidos) as nombre FROM profesores ORDER BY nombre");
-    res.json({ tiempo: Date.now() - inicio, profesores: rows });
+    if (useRemoteMySQL) {
+      const { default: fetch } = await import('node-fetch');
+      const response = await fetch(`${mysqlApiUrl}/api/profesores`);
+      if (!response.ok) {
+        throw new Error(`Error HTTP ${response.status} al obtener profesores remotos`);
+      }
+      const remotos = await response.json();
+      const profesores = (remotos || []).map(p => ({
+        id: p.id,
+        nombre: `${p.nombre} ${p.apellidos}`.trim()
+      }));
+      res.json({ tiempo: Date.now() - inicio, profesores });
+    } else {
+      const [rows] = await pool.query("SELECT id, CONCAT(nombre,' ',apellidos) as nombre FROM profesores ORDER BY nombre");
+      res.json({ tiempo: Date.now() - inicio, profesores: rows });
+    }
   } catch(err) {
     // Si MySQL falla, devolver datos de ejemplo
     const profesoresEjemplo = [
@@ -1322,8 +1423,22 @@ app.get("/api/profesores", async (req, res) => {
 app.get("/api/grupos", async (req, res) => {
   const inicio = Date.now();
   try {
-    const [rows] = await pool.query("SELECT id, nombre FROM grupos ORDER BY nombre");
-    res.json({ tiempo: Date.now() - inicio, grupos: rows });
+    if (useRemoteMySQL) {
+      const { default: fetch } = await import('node-fetch');
+      const response = await fetch(`${mysqlApiUrl}/api/grupos`);
+      if (!response.ok) {
+        throw new Error(`Error HTTP ${response.status} al obtener grupos remotos`);
+      }
+      const remotos = await response.json();
+      const grupos = (remotos || []).map(g => ({
+        id: g.id,
+        nombre: g.nombre
+      }));
+      res.json({ tiempo: Date.now() - inicio, grupos });
+    } else {
+      const [rows] = await pool.query("SELECT id, nombre FROM grupos ORDER BY nombre");
+      res.json({ tiempo: Date.now() - inicio, grupos: rows });
+    }
   } catch(err) {
     // Si MySQL falla, devolver datos de ejemplo
     const gruposEjemplo = [
