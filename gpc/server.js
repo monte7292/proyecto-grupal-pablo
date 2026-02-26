@@ -37,13 +37,18 @@ app.use((req, res, next) => {
 // - USE_REMOTE_MYSQL=false  -> conexión directa a MySQL local (XAMPP)
 // - USE_REMOTE_MYSQL=true   -> consumo de la API HTTP de Jotasones (sin tocar MySQL desde Windows)
 const useRemoteMySQL = process.env.USE_REMOTE_MYSQL === 'true';
-const mysqlApiUrl = process.env.MYSQL_API_URL || 'http://172.22.0.205:3000';
+const mysqlApiUrl = process.env.MYSQL_API_URL || 'http://127.0.0.1:3000';
 
 let pool = null;
 let credenciales = null;
 
 if (!useRemoteMySQL) {
-  credenciales = require('./credencialesSQL');
+  // Intentar cargar credenciales locales (algunos entornos usan credencialesSQL_lubuntu.js)
+  try {
+    credenciales = require('./credencialesSQL');
+  } catch (_) {
+    credenciales = require('./credencialesSQL_lubuntu');
+  }
   pool = mysql.createPool(credenciales);
 
   console.log(`🗄️ MySQL: LOCAL`);
